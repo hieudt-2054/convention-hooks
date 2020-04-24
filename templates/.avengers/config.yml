@@ -1,0 +1,4 @@
+PhpChecker: true
+JsChecker: false
+phpFolder: app
+typeJs: ''

@@ -1,0 +1,98 @@
+#!/bin/bash
+set -e
+parse_yml() {
+   local prefix=$2
+   local s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')
+   sed -ne "s|^\($s\)\($w\)$s:$s\"\(.*\)\"$s\$|\1$fs\2$fs\3|p" \
+        -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p"  $1 |
+   awk -F$fs '{
+      indent = length($1)/2;
+      vname[indent] = $2;
+      for (i in vname) {if (i > indent) {delete vname[i]}}
+      if (length($3) > 0) {
+         vn=""; for (i=0; i<indent; i++) {vn=(vn)(vname[i])("_")}
+         printf("%s%s%s=\"%s\"\n", "'$prefix'",vn, $2, $3);
+      }
+   }'
+}
+
+eval $(parse_yml .avengers/config.yml "config_")
+
+GREEN='\033[0;32m'
+WHITE='\033[1;37m'
+YELLOW='\033[1;33m'
+BLACK='\033[0;30m'
+RED='\033[33;31m'
+echo -e "${GREEN}"
+echo "###################################"
+echo "# Avengers Group - Ironman Member #"
+echo "###################################"
+
+package_exist() {
+    composer global show | grep $1 >/dev/null
+}
+
+checkOrCreate() {
+    if package_exist $1; then
+        echo -e "${GREEN}$2 installed ✓"
+        echo -e ${WHITE}
+    else
+        echo -e "${WHITE}INSTALLING $2"
+        composer global require $1
+        echo "DONE Installed !"
+    fi
+}
+
+echo -e "${RED}STEP 1: CHECK REQUIREMENT PACKAGE CHECK CONVENTION"
+echo -e ${WHITE}
+checkOrCreate 'squizlabs/php_codesniffer' 'PHPCS'
+checkOrCreate 'phpmetrics/phpmetrics' 'PHPMetrics'
+checkOrCreate 'pdepend/pdepend' 'PHPDepend'
+checkOrCreate 'phpmd/phpmd' 'PHPMessDetector'
+checkOrCreate 'sebastian/phpcpd' 'PHPCopyPasteDetector'
+
+if find /usr/local/bin/phpcbf.phar > /dev/null 2>&1 ; then
+    echo -e "PHPCBF Installed & Symlink"
+else
+    echo "Please enter password root for install & link phpcbf"
+    sudo curl -sSL https://squizlabs.github.io/PHP_CodeSniffer/phpcbf.phar -o /usr/local/bin/phpcbf.phar
+    sudo chmod +x /usr/local/bin/phpcbf.phar
+fi
+echo -e "${GREEN}Symlink packages"
+homeComposer=$(composer global config home)
+ln -nsf $homeComposer/vendor/bin/phpcs /usr/local/bin/phpcs
+ln -nsf $homeComposer/vendor/bin/pdepend /usr/local/bin/pdepend
+ln -nsf $homeComposer/vendor/bin/phpmetrics /usr/local/bin/phpmetrics
+ln -nsf $homeComposer/vendor/bin/phpmd /usr/local/bin/phpmd
+ln -nsf $homeComposer/vendor/bin/phpcpd /usr/local/bin/phpcpd
+ln -nsf $homeComposer/vendor/bin/phpcbf /usr/local/bin/phpcbf
+
+echo -e "${GREEN}STEP 1 Done ✓"
+echo -e "${RED}STEP 2: CHECK REQUIREMENT PACKAGE STANDARD FRAMGIA"
+
+if phpcs -i | grep Framgia > /dev/null 2>&1 ; then
+    echo -e "${GREEN}Framgia Standard Installed ✓"
+else
+    echo -e "${GREEN}Framgia Standard Installing ..."
+    git clone https://github.com/wataridori/framgia-php-codesniffer.git ~/Framgia
+    mv ~/Framgia ~/.composer/vendor/squizlabs/php_codesniffer/src/Standards
+    if phpcs -i | grep Framgia > /dev/null 2>&1 ; then
+        echo -e "${GREEN}Framgia Standard Installed ✓"
+    fi
+fi
+echo -e "${GREEN}STEP 2 Done ✓"
+
+
+if $config_PhpChecker ; then
+    echo "Running PHP CS Checking ..."
+    phpcs --standard=Framgia $config_phpFolder
+fi
+
+if $config_JsChecker ; then
+    echo "Running Js Checking ..."
+    if [ "$config_typeJs" == "yarn" ]; then
+        yarn run eslint
+    else
+        npm run eslint
+    fi
+fi
